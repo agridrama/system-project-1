@@ -17,6 +17,7 @@ current_directory = os.getcwd()
 file_name = "image.jfif"
 file_path = os.path.join(current_directory, "samplerec.png")
 file_path2 = os.path.join(current_directory, "sin.png")
+file_path3 = os.path.join(current_directory, "todo.txt")
 sg.theme("Systemdefault")
 itm = []  # todoリスト
 # 使い方を説明するテキストは画像で渡しているけどそれ以外にいい方法が思いつかなかった
@@ -105,7 +106,7 @@ while True:
         r = sg.PopupGetText('やりたいことを入力してください.', title='入力画面')
         if r:  # 戻り値が None や空文字列でない場合の処理
             itm.append(r)
-            window['todolist']. Update(values=itm)
+            window['todolist'].Update(values=itm)
     if event == "start":
         cv1 = sg.Canvas(size =(400,300), key ="-CANVAS-")
         x =[]
