@@ -3,12 +3,23 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from PIL import Image
-import cv2 as cv
+#import cv2 as cv
 import io
 import os
 import time
 import random
 import threading
+import volume_control
+import pyaudio
+import wave
+import pydub
+import sys
+#volume_control.py
+freq = 60 #60秒おきに集中力を計算
+excert_range = 5 #その５倍の時間の姿勢データを計算に使う
+global position
+position = [4] * freq*excert_range  #####集中力を計算するために姿勢を格納する配列(最初は非集中なので姿勢4を入れてる)
+
 
 
 # カレントディレクトリのパスを取得
@@ -17,9 +28,19 @@ current_directory = os.getcwd()
 file_name = "image.jfif"
 file_path = os.path.join(current_directory, "samplerec.png")
 file_path2 = os.path.join(current_directory, "sin.png")
-file_path3 = os.path.join(current_directory, "todo.txt")
 sg.theme("Systemdefault")
 itm = []  # todoリスト
+
+# todoリストの保存先からの読み込み
+if os.path.isfile('mytext.txt'):
+    f = open('mytext.txt', 'r')
+
+    itm = f.read().splitlines()
+
+    f.close()
+
+
+
 # 使い方を説明するテキストは画像で渡しているけどそれ以外にいい方法が思いつかなかった
 # このテキスト、ある程度詳しく書かないといけない気もするので説明だけで独立させてタブにさせてもよさそう
 layout1 = [[sg.Listbox(itm, size=(60, 7), key="todolist", enable_events=True),
@@ -99,6 +120,14 @@ while True:
     print("イベント:", event, ":値", values)
 
     if event == None:
+        # 一旦リセット
+        with open("mytext.txt", "w", encoding='utf-8') as f:
+            f.write('')
+        #現在のtodoリストの保存
+        with open("mytext.txt", "a", encoding='utf-8') as f:
+            for s in itm:
+                f.write(s)
+                f.write("\n")
         break
     elif values["todolist"] != []:
         window['start'].update(disabled=False)
@@ -106,7 +135,7 @@ while True:
         r = sg.PopupGetText('やりたいことを入力してください.', title='入力画面')
         if r:  # 戻り値が None や空文字列でない場合の処理
             itm.append(r)
-            window['todolist'].Update(values=itm)
+            window['todolist']. Update(values=itm)
     if event == "start":
         cv1 = sg.Canvas(size =(400,300), key ="-CANVAS-")
         x =[]
@@ -125,7 +154,12 @@ while True:
         time_current = time.time()
         timer_thread = threading.Thread(target=timer, args=(x, y,name))
         timer_thread.start()
+        t1 = threading.Thread(target=volume_control.get_position_seq)
+        t1.start()
+        volume_thread =threading.Thread(target=volume_control.play_audio, args=(freq,))
+        volume_thread.start()
     if event == "end":
+        volume_thread =threading.Thread(target=volume_control.play_audio, args=(freq,))
         window["end"].update(disabled=True)
         window["start"].update(disabled=False)
 window.close()

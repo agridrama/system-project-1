@@ -7,14 +7,13 @@ import threading
 import random
 import time
 import sys
-
 freq = 60 #60秒おきに集中力を計算
 excert_range = 5 #その５倍の時間の姿勢データを計算に使う
-global position 
+global position
 position = [4] * freq*excert_range  #####集中力を計算するために姿勢を格納する配列(最初は非集中なので姿勢4を入れてる)
 
-def get_position_seq(): 
-    global position 
+def get_position_seq():
+    global position
     n = len(position)
     i = 0
     while True:
@@ -24,9 +23,9 @@ def get_position_seq():
         if(i == n):
             i = 0
         time.sleep(1) ##1秒ディレイを入れてる(多分いらない)
-        
+
 def concentration_rate(sequence): ###集中力を計算する(関数は適当)
-    counts = [0, 0, 0, 0]  
+    counts = [0, 0, 0, 0]
     for num in sequence:
         if num == 1:
             counts[0] += 1
@@ -68,12 +67,15 @@ def volume(raw_volume):     ##dBに基づいて適切な音量に変える
 
 def play_audio(freq):   ##音楽を再生する、音量は1秒おきに少しずつ滑らかに変わるようになってる(中断ボタンに合わせて再生を終了するとかは未実装)
     global position
+    global event
     decay = int(freq/2)
     threshold_0 = 0.1 ##これを下回ったら非集中と仮定
     threshold_1 = 0.5 ##これを上回ったら集中と仮定
     n = 0
     concentration_1 = 0
     while True:
+        if event == "end":
+            break
         file_path = choose_music(concentration_1,threshold_0)
         # WAV形式に変換
         wav_file = file_path[:-4] + ".wav"
@@ -122,7 +124,7 @@ def play_audio(freq):   ##音楽を再生する、音量は1秒おきに少し�
                 adjusted_data = adjusted_array.tobytes()
 
                 # 調整済みの音声を再生
-            
+
                 stream.write(adjusted_data)
 
                 # 次のデータを読み込む
@@ -131,7 +133,10 @@ def play_audio(freq):   ##音楽を再生する、音量は1秒おきに少し�
                 raw_volume += concentration_step
 
                 #########ここに中断ボタンを押されたらループを抜けるコード??
-
+                if event == "end":
+                    break
+            if event == "end":
+                break
             volume_factor = volume(raw_volume)
 
             for i in range(freq - decay):
@@ -144,15 +149,18 @@ def play_audio(freq):   ##音楽を再生する、音量は1秒おきに少し�
                 adjusted_data = adjusted_array.tobytes()
 
                 # 調整済みの音声を再生
-            
+
                 stream.write(adjusted_data)
 
                 # 次のデータを読み込む
                 data = wf.readframes(chunk)
 
                 #########ここに中断ボタンを押されたらループを抜けるコード??
+                if event == "end":
+                    break
+            if event == "end":
+                break
 
-            
         # ストリームを閉じる
         stream.stop_stream()
         stream.close()
@@ -164,6 +172,8 @@ def play_audio(freq):   ##音楽を再生する、音量は1秒おきに少し�
         os.remove(wav_file)
 
         #########ここに中断ボタンを押されたらループを抜けるコード??
+        if event == "end":
+            break
 
 # メインの処理
 if __name__ == "__main__":
