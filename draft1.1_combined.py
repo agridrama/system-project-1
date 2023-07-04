@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from PIL import Image
-#import cv2 as cv
+# import cv2 as cv
 import io
 import os
 import time
@@ -14,24 +14,27 @@ import pyaudio
 import wave
 import pydub
 import sys
-#volume_control.py
-freq = 60 #60秒おきに集中力を計算
-excert_range = 5 #その５倍の時間の姿勢データを計算に使う
+# volume_control.py
+freq = 60  # 60秒おきに集中力を計算
+excert_range = 5  # その５倍の時間の姿勢データを計算に使う
 global position
-position = [4] * freq*excert_range  #####集中力を計算するために姿勢を格納する配列(最初は非集中なので姿勢4を入れてる)
+position = [4] * freq*excert_range  # 集中力を計算するために姿勢を格納する配列(最初は非集中なので姿勢4を入れてる)
+
+
 def get_position_seq():
     global position
     n = len(position)
     i = 0
     while True:
-        position[i] = 1 ##############ここに姿勢を入れる####################
-        print("姿勢は",position[i])
+        position[i] = 1  # ここに姿勢を入れる####################
+        print("姿勢は", position[i])
         i += 1
-        if(i == n):
+        if (i == n):
             i = 0
-        time.sleep(1) ##1秒ディレイを入れてる(多分いらない)
+        time.sleep(1)  # 1秒ディレイを入れてる(多分いらない)
 
-def concentration_rate(sequence): ###集中力を計算する(関数は適当)
+
+def concentration_rate(sequence):  # 集中力を計算する(関数は適当)
     counts = [0, 0, 0, 0]
     for num in sequence:
         if num == 1:
@@ -43,47 +46,52 @@ def concentration_rate(sequence): ###集中力を計算する(関数は適当)
         elif num == 4:
             counts[3] += 1
     concentrate_raw = (counts[0]+counts[1]*0.2)/(len(sequence))
-    if concentrate_raw >= 0.7:  ##集中力はせいぜい0.7が最大と仮定
+    if concentrate_raw >= 0.7:  # 集中力はせいぜい0.7が最大と仮定
         concentrate = 1
     else:
         concentrate = concentrate_raw/0.7
-    print("集中力は",concentrate)
+    print("集中力は", concentrate)
     return concentrate
 
-def choose_music(concentration,threshold):  ##集中力に応じて音楽を選ぶ
+
+def choose_music(concentration, threshold):  # 集中力に応じて音楽を選ぶ
     folder_path = os.path.dirname(os.path.abspath(sys.argv[0]))
-    #上がる方
+    # 上がる方
     if concentration < threshold:
         mp3_folder_path = os.path.join(folder_path, "no_concentrate_music")
-        mp3_files = [file for file in os.listdir(mp3_folder_path) if file.endswith(".mp3")]
+        mp3_files = [file for file in os.listdir(
+            mp3_folder_path) if file.endswith(".mp3")]
         random_file = random.choice(mp3_files)
         file_path = os.path.join(mp3_folder_path, random_file)
-        print("上がる音楽",file_path,"を再生します")
-    #集中できる方
+        print("上がる音楽", file_path, "を再生します")
+    # 集中できる方
     else:
         mp3_folder_path = os.path.join(folder_path, "concentrate_music")
-        mp3_files = [file for file in os.listdir(mp3_folder_path) if file.endswith(".mp3")]
+        mp3_files = [file for file in os.listdir(
+            mp3_folder_path) if file.endswith(".mp3")]
         random_file = random.choice(mp3_files)
         file_path = os.path.join(mp3_folder_path, random_file)
-        print("集中できる音楽",file_path,"を再生します")
+        print("集中できる音楽", file_path, "を再生します")
     return file_path
 
-def volume(raw_volume):     ##dBに基づいて適切な音量に変える
+
+def volume(raw_volume):  # dBに基づいて適切な音量に変える
     min_volume = 0.1
     return (10**(raw_volume*-0.5)-10**-0.5+min_volume)/(1-10**-0.5+min_volume)
 
-def play_audio(freq):   ##音楽を再生する、音量は1秒おきに少しずつ滑らかに変わるようになってる(中断ボタンに合わせて再生を終了するとかは未実装)
+
+def play_audio(freq):  # 音楽を再生する、音量は1秒おきに少しずつ滑らかに変わるようになってる(中断ボタンに合わせて再生を終了するとかは未実装)
     global position
     global event
     decay = int(freq/2)
-    threshold_0 = 0.1 ##これを下回ったら非集中と仮定
-    threshold_1 = 0.5 ##これを上回ったら集中と仮定
+    threshold_0 = 0.1  # これを下回ったら非集中と仮定
+    threshold_1 = 0.5  # これを上回ったら集中と仮定
     n = 0
     concentration_1 = 0
     while True:
         if event == "end":
             break
-        file_path = choose_music(concentration_1,threshold_0)
+        file_path = choose_music(concentration_1, threshold_0)
         # WAV形式に変換
         wav_file = file_path[:-4] + ".wav"
         sound = pydub.AudioSegment.from_mp3(file_path)
@@ -97,13 +105,13 @@ def play_audio(freq):   ##音楽を再生する、音量は1秒おきに少し�
         p = pyaudio.PyAudio()
         stream = p.open(format=p.get_format_from_width(wf.getsampwidth()),
                         channels=wf.getnchannels(),
-                        rate = chunk,
+                        rate=chunk,
                         output=True)
 
         # 音声のストリームを再生
         data = wf.readframes(chunk)
         concentration_origin = concentration_1
-        print("最初の集中力は",concentration_origin)
+        print("最初の集中力は", concentration_origin)
         while data:
 
             # 入力値に基づいて音量を調整
@@ -124,7 +132,7 @@ def play_audio(freq):   ##音楽を再生する、音量は1秒おきに少し�
                 # バイナリデータをnumpy配列に変換
                 audio_array = np.frombuffer(data, dtype=np.int16)
                 volume_factor = volume(raw_volume)
-                print("音量は",volume_factor)
+                print("音量は", volume_factor)
                 adjusted_array = (audio_array * volume_factor).astype(np.int16)
 
                 # 音声データをバイナリに戻す
@@ -139,7 +147,7 @@ def play_audio(freq):   ##音楽を再生する、音量は1秒おきに少し�
 
                 raw_volume += concentration_step
 
-                #########ここに中断ボタンを押されたらループを抜けるコード??
+                # ここに中断ボタンを押されたらループを抜けるコード??
                 if event == "end":
                     break
             if event == "end":
@@ -149,7 +157,7 @@ def play_audio(freq):   ##音楽を再生する、音量は1秒おきに少し�
             for i in range(freq - decay):
                 # バイナリデータをnumpy配列に変換
                 audio_array = np.frombuffer(data, dtype=np.int16)
-                print("音量は",volume_factor)
+                print("音量は", volume_factor)
                 adjusted_array = (audio_array * volume_factor).astype(np.int16)
 
                 # 音声データをバイナリに戻す
@@ -162,7 +170,7 @@ def play_audio(freq):   ##音楽を再生する、音量は1秒おきに少し�
                 # 次のデータを読み込む
                 data = wf.readframes(chunk)
 
-                #########ここに中断ボタンを押されたらループを抜けるコード??
+                # ここに中断ボタンを押されたらループを抜けるコード??
                 if event == "end":
                     break
             if event == "end":
@@ -178,9 +186,10 @@ def play_audio(freq):   ##音楽を再生する、音量は1秒おきに少し�
         # 一時的に作成したWAVファイルを削除
         os.remove(wav_file)
 
-        #########ここに中断ボタンを押されたらループを抜けるコード??
+        # ここに中断ボタンを押されたらループを抜けるコード??
         if event == "end":
             break
+
 
 # カレントディレクトリのパスを取得
 current_directory = os.getcwd()
@@ -200,7 +209,6 @@ if os.path.isfile('mytext.txt'):
     f.close()
 
 
-
 # 使い方を説明するテキストは画像で渡しているけどそれ以外にいい方法が思いつかなかった
 # このテキスト、ある程度詳しく書かないといけない気もするので説明だけで独立させてタブにさせてもよさそう
 layout1 = [[sg.Listbox(itm, size=(60, 7), key="todolist", enable_events=True),
@@ -212,9 +220,9 @@ layout1 = [[sg.Listbox(itm, size=(60, 7), key="todolist", enable_events=True),
 # 2つ目のタブ、結果表示ページ(リアルタイムで動かしたい)
 
 
-cv1 = sg.Canvas(size =(400,300), key ="-CANVAS-")
+cv1 = sg.Canvas(size=(400, 300), key="-CANVAS-")
 layout2 = [[cv1]]
-#layout2 = [[sg.Image(filename =file_path2)]]
+# layout2 = [[sg.Image(filename =file_path2)]]
 
 
 layout = [
@@ -245,11 +253,10 @@ def update_plot(x, y):
     fig.canvas.draw()  # プロットを描画"""
 
 
-
 # 時間経過は別スレッドで
 
 
-def timer(x, y,name):
+def timer(x, y, name):
     global window
     global event
     global values
@@ -259,15 +266,15 @@ def timer(x, y,name):
         seconds += 1
         x.append(seconds)
         y.append(random.random())
-        plt.plot(x, y,color ="blue")
+        plt.plot(x, y, color="blue")
         plt.xlabel("x")
         plt.ylabel("sin(x)")
         plt.savefig(name)
-        #update_plot(x,y)
-            # Matplotlibの描画をGUIキャンバスに反映
-        #fig_photo = plt.gcf()
-        #draw_photo = fig_photo.canvas.tostring_rgb()
-        #window["-CANVAS-"].draw_image(data=draw_photo, location=(0, 0))
+        # update_plot(x,y)
+        # Matplotlibの描画をGUIキャンバスに反映
+        # fig_photo = plt.gcf()
+        # draw_photo = fig_photo.canvas.tostring_rgb()
+        # window["-CANVAS-"].draw_image(data=draw_photo, location=(0, 0))
         print(x)
         if event == "end":
             break
@@ -283,7 +290,7 @@ while True:
         # 一旦リセット
         with open("mytext.txt", "w", encoding='utf-8') as f:
             f.write('')
-        #現在のtodoリストの保存
+        # 現在のtodoリストの保存
         with open("mytext.txt", "a", encoding='utf-8') as f:
             for s in itm:
                 f.write(s)
@@ -297,11 +304,11 @@ while True:
             itm.append(r)
             window['todolist']. Update(values=itm)
     if event == "start":
-        cv1 = sg.Canvas(size =(400,300), key ="-CANVAS-")
-        x =[]
-        y =[]
-        name =random.random()
-        name =str(name)+".png"
+        cv1 = sg.Canvas(size=(400, 300), key="-CANVAS-")
+        x = []
+        y = []
+        name = random.random()
+        name = str(name)+".png"
         plt.plot(x, y)
         plt.xlabel("x")
         plt.ylabel("sin(x)")
@@ -312,13 +319,17 @@ while True:
         window["end"].update(disabled=False)
         window["start"].update(disabled=True)
         time_current = time.time()
-        timer_thread = threading.Thread(target=timer, args=(x, y,name))
+        timer_thread = threading.Thread(target=timer, args=(x, y, name))
         timer_thread.start()
         t1 = threading.Thread(target=volume_control.get_position_seq)
         t1.start()
-        volume_thread =threading.Thread(target=play_audio, args=(freq,))
+        volume_thread = threading.Thread(target=play_audio, args=(freq,))
         volume_thread.start()
     if event == "end":
         window["end"].update(disabled=True)
         window["start"].update(disabled=False)
+        window["nowrec"].update(visible=False)
+        window["start"].update(disabled=False)
+        itm.remove(values['todolist'][0])
+        window['todolist']. Update(values=itm)
 window.close()
