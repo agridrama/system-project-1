@@ -14,11 +14,80 @@ import pyaudio
 import wave
 import pydub
 import sys
+import serial
 # volume_control.py
 freq = 60  # 60秒おきに集中力を計算
 excert_range = 5  # その５倍の時間の姿勢データを計算に使う
+# した二行は書き換える
 global position
 position = [4] * freq*excert_range  # 集中力を計算するために姿勢を格納する配列(最初は非集中なので姿勢4を入れてる)
+global data_array
+global concent_score
+data_array = []
+concent_score = 80
+
+
+concent_score = 80
+
+
+def serial_to_array():  # マルチスレッド前提。data_arrayに12列でデータを送り続ける、
+    global concent_score
+
+    # シリアルポートの設定
+    ser = serial.Serial('COM4', 9600)  # ポート名とボーレートを指定してください
+    row_count = 0
+    accums = 0
+    prev_data = np.zeros(12)
+    history = []
+    sum_history = 0
+    init = time.time()
+
+    def accum_signal(sen_vals: np.array, prev_vals: np.array, accum_vals: np.array):
+        accum_vals *= 0.7
+        accum_vals += np.abs(sen_vals-prev_vals)*0.3
+        return accum_vals
+
+    while True:
+        # if ser.in_waiting > 0:
+
+        data = ser.readline().decode().rstrip()  # 改行文字を削除
+        data = np.array([int(x)
+                        for x in data.split(',') if x.strip() != ''])
+        # print(data)
+        row_count += 1
+        accums = accum_signal(data, prev_data, accums)
+        history.append(max(accums.sum()-30, 0))
+        sum_history += history[len(history)-1]
+        if len(history) > 200:
+            sum_history -= history[len(history)-201]
+        # print(time.time()-init)
+        concent_score = 100-np.sqrt(max(sum_history, 0))/3
+        print(concent_score)
+        prev_data = data
+        # if row_count == 10:#行数はここ
+        # break
+        # else:
+        #     print("sleep")
+        #     time.sleep(0.1)
+        # print(sum_history)
+    # return data_array
+        if concent_score < 60:
+            data = "on"  # 送信する数値を設定します
+            # ser.readline()
+            ser.write(data.encode("ascii") + b'\n')
+        if concent_score > 60:
+            data = "off"  # 送信する数値を設定します
+            # ser.readline()
+            ser.write(data.encode() + b'\n')
+
+        if event == "end":
+            data = "off"
+            ser.write(data.encode() + b'\n')
+            break
+        if event == "None":
+            data = "off"
+            ser.write(data.encode() + b'\n')
+            break
 
 
 def get_position_seq():
@@ -84,14 +153,14 @@ def play_audio(freq):  # 音楽を再生する、音量は1秒おきに少しず
     global position
     global event
     decay = int(freq/2)
-    threshold_0 = 0.1  # これを下回ったら非集中と仮定
-    threshold_1 = 0.5  # これを上回ったら集中と仮定
+    threshold_0 = 0.4  # これを下回ったら非集中と仮定
+    threshold_1 = 0.8  # これを上回ったら集中と仮定
     n = 0
-    concentration_1 = 0
+    concentration_now = 0
     while True:
         if event == "end":
             break
-        file_path = choose_music(concentration_1, threshold_0)
+        file_path = choose_music(concentration_now, threshold_0)
         # WAV形式に変換
         wav_file = file_path[:-4] + ".wav"
         sound = pydub.AudioSegment.from_mp3(file_path)
@@ -110,23 +179,20 @@ def play_audio(freq):  # 音楽を再生する、音量は1秒おきに少しず
 
         # 音声のストリームを再生
         data = wf.readframes(chunk)
-        concentration_origin = concentration_1
+        concentration_origin = concentration_now
         print("最初の集中力は", concentration_origin)
         while data:
 
             # 入力値に基づいて音量を調整
-            concentration_0 = concentration_1
-            concentration_1 = concentration_rate(position)
+            concentration_prev = concentration_now
+            concentration_now = concent_score/100  # ここを現在の集中力、concentration_rateは消して良し
+
             n += freq
 
-            if concentration_origin < threshold_0 and concentration_1 > threshold_1:
-                break
-
-            elif concentration_origin > threshold_1 and concentration_1 < threshold_0:
-                break
-
-            concentration_step = (concentration_1 - concentration_0)/decay
-            raw_volume = concentration_0
+            if concentration_now <= concentration_prev:
+                concentration_now = concentration_prev
+            concentration_step = (concentration_now - concentration_prev)/decay
+            raw_volume = concentration_prev
             raw_volume += concentration_step
             for i in range(decay):
                 # バイナリデータをnumpy配列に変換
@@ -146,6 +212,13 @@ def play_audio(freq):  # 音楽を再生する、音量は1秒おきに少しず
                 data = wf.readframes(chunk)
 
                 raw_volume += concentration_step
+
+                if concentration_origin < threshold_0 and concent_score > threshold_1:
+                    break
+
+                elif concentration_origin > threshold_1 and concent_score < threshold_0:
+                    concentration_prev = 0
+                    break
 
                 # ここに中断ボタンを押されたらループを抜けるコード??
                 if event == "end":
@@ -170,6 +243,13 @@ def play_audio(freq):  # 音楽を再生する、音量は1秒おきに少しず
                 # 次のデータを読み込む
                 data = wf.readframes(chunk)
 
+                if concentration_origin < threshold_0 and concent_score > threshold_1:
+                    break
+
+                elif concentration_origin > threshold_1 and concent_score < threshold_0:
+                    concentration_prev = 0
+                    break
+
                 # ここに中断ボタンを押されたらループを抜けるコード??
                 if event == "end":
                     break
@@ -184,7 +264,7 @@ def play_audio(freq):  # 音楽を再生する、音量は1秒おきに少しず
         p.terminate()
 
         # 一時的に作成したWAVファイルを削除
-        os.remove(wav_file)
+        # os.remove(wav_file)
 
         # ここに中断ボタンを押されたらループを抜けるコード??
         if event == "end":
@@ -214,8 +294,10 @@ if os.path.isfile('mytext.txt'):
 layout1 = [[sg.Listbox(itm, size=(60, 7), key="todolist", enable_events=True),
             sg.Button("やること追加", key="taskadd"),
             sg.Button("開始", size=(10, 2), key="start", disabled=True),
-           sg.Button(image_filename=file_path, key="nowrec", disabled=True, visible=False)],
-           [sg.Button("終了", key="end", disabled=True)],
+           # sg.Button(image_filename=file_path, key="nowrec", disabled=True, visible=False)
+            ],
+           [sg.Button("終了", key="end", disabled=True),
+            sg.Text('計測中', font=('HG正楷書体-PRO', 80), text_color='#000000', background_color='#ffff00', key="nowrec", visible=False)],
            [sg.Text("録音が完了しました。上のタブを切り替えて結果を確認してください", key="afterrec", visible=False)]]
 # 2つ目のタブ、結果表示ページ(リアルタイムで動かしたい)
 
@@ -265,17 +347,16 @@ def timer(x, y, name):
         time.sleep(1)
         seconds += 1
         x.append(seconds)
-        y.append(random.random())
+        y.append(concent_score)
         plt.plot(x, y, color="blue")
         plt.xlabel("x")
-        plt.ylabel("sin(x)")
+        plt.ylabel("concent_score")
         plt.savefig(name)
         # update_plot(x,y)
         # Matplotlibの描画をGUIキャンバスに反映
         # fig_photo = plt.gcf()
         # draw_photo = fig_photo.canvas.tostring_rgb()
         # window["-CANVAS-"].draw_image(data=draw_photo, location=(0, 0))
-        print(x)
         if event == "end":
             break
 
@@ -321,10 +402,14 @@ while True:
         time_current = time.time()
         timer_thread = threading.Thread(target=timer, args=(x, y, name))
         timer_thread.start()
-        t1 = threading.Thread(target=volume_control.get_position_seq)
+        t2 = threading.Thread(target=serial_to_array)
+        t2.start()
+        t1 = threading.Thread(target=get_position_seq)
         t1.start()
         volume_thread = threading.Thread(target=play_audio, args=(freq,))
         volume_thread.start()
+        # t3 = threading.Thread(target=vibration)
+        # t3.start()
     if event == "end":
         window["end"].update(disabled=True)
         window["start"].update(disabled=False)
